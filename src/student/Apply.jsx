@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   useStore, student, appOf, isPreassigned, appClass, memberIds, readiness, freeHolderView, demandMap,
 } from '../lib/store.js';
-import { classLabel, typeForSize } from '../lib/engine.js';
+import { classLabel, typeForSize, yearLabel, classOf } from '../lib/engine.js';
 import { Button, Chip, ConfirmButton, useAct, fmtDeadline } from '../components/ui.jsx';
 import ChoicePlanner, { Checklist, ini, short } from '../components/ChoicePlanner.jsx';
 import Icon from '../components/Icon.jsx';
@@ -72,7 +72,7 @@ export function Apply({ sid }) {
             <Checklist items={[
               [true, size > 1 ? `${size} people · ranks as ${classLabel(ci)}` : `Applying alone · ${classLabel(ci)}`],
               [filled >= 3 || check.ok, `${filled} of 3 choices placed`],
-              [check.perChoice.every((p) => !p), 'Every choice is valid'],
+              [filled > 0 && check.perChoice.every((p) => !p), 'Every choice is valid'],
             ]} />
             <Button kind="primary" className="block" disabled={!check.ok || submitted} onClick={() => act(() => student.submit(app.id), 'Application submitted')}>
               {submitted ? 'Submitted' : 'Submit application'}
@@ -98,6 +98,12 @@ export function Apply({ sid }) {
         sub={s.phase === 'round1_open' ? `Round 1 closes ${fmtDeadline(s.settings.r1Deadline)}` : 'Round 1 is closed; this form can no longer be changed.'}
         actions={<Chip tone={submitted ? 'accent' : 'attn'}>{submitted ? 'Submitted' : 'Draft'}</Chip>} />
       <div className="content">
+        {app.notice && (
+          <div className="notice attn row between gap-s wrap" role="status">
+            <span>{app.notice}</span>
+            <Button size="xs" kind="ghost" onClick={() => act(() => student.dismissNotice(app.id))}>Dismiss</Button>
+          </div>
+        )}
         <MembersBar s={s} app={app} sid={sid} editable={editable} />
         <ChoicePlanner s={s} app={app} round={1} editable={editable} demand={editable ? demandMap(s, sid) : null} side={side}
           readOnlyNote={isRep ? 'Round 1 is closed.' : `Only ${s.students[app.repId].name.split(' ')[0]} (the rep) can change the choices.`} />
@@ -134,7 +140,7 @@ function MembersBar({ s, app, sid, editable }) {
             <span key={m} className={`mchip ${m === app.repId ? 'rep' : ''}`}>
               <span className="avatar xs">{ini(s, m)}</span>
               <span>{m === sid ? 'You' : short(s, m)}</span>
-              <span className="mchip-yr">{s.students[m].year === 4 ? '4th' : '3rd'}</span>
+              <span className="mchip-yr">{`’${String(classOf(s.students[m].year)).slice(2)}`}</span>
               {m === app.repId && <span className="mchip-tag">Rep</span>}
               {editable && m !== sid && (
                 <button type="button" className="mchip-x" aria-label={`Remove ${s.students[m].name}`}
@@ -147,7 +153,7 @@ function MembersBar({ s, app, sid, editable }) {
           )}
         </div>
       </div>
-      {ci.year === 3 && me.year === 4 && size > 1 && <p className="mb-note">This group ranks as 3rd year because it has 3rd-year members. You give up 4th-year priority by staying in it.</p>}
+      {ci.year === 3 && me.year === 4 && size > 1 && <p className="mb-note">This group counts as the Class of 2029 because it includes incoming students. Staying in it means giving up final-year priority.</p>}
       {q !== null && editable && (
         <div className="add-pop">
           <label className="searchbox">
@@ -158,7 +164,7 @@ function MembersBar({ s, app, sid, editable }) {
             {candidates.map((x) => (
               <li key={x.id}>
                 <span className="avatar xs">{x.name.split(' ').map((p) => p[0]).join('')}</span>
-                <span className="t"><b>{x.name}</b><span>{x.id} · {x.year === 4 ? '4th' : '3rd'} year</span></span>
+                <span className="t"><b>{x.name}</b><span>{x.id} · {yearLabel(x.year)}</span></span>
                 <Button size="xs" kind="light" onClick={() => act(() => student.addMember(app.id, x.id), `${x.name.split(' ')[0]} added`)}>Add</Button>
               </li>
             ))}
@@ -190,7 +196,7 @@ export function Round2({ sid }) {
   const side = (
     <section className="side-card submit-card">
       {isRep ? <>
-        <Checklist items={[[filled >= 1, `${filled} of 3 choices placed (at least 1)`], [check.perChoice.every((p) => !p), 'Every choice is free']]} />
+        <Checklist items={[[filled >= 1, `${filled} of 3 choices placed (at least 1)`], [filled > 0 && check.perChoice.every((p) => !p), 'Every choice is free']]} />
         <Button kind="primary" className="block" disabled={!check.ok || done} onClick={() => act(() => student.submitRound2(app.id), 'Round 2 choices submitted')}>
           {done ? 'Submitted' : 'Submit choices'}
         </Button>

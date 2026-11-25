@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useStore, gs, appOf, wingPlace } from '../lib/store.js';
+import { useStore, gs, appOf, wingPlace, wingOf } from '../lib/store.js';
 import { Button, Drawer, useAct, Chip } from '../components/ui.jsx';
 import BuildingMap, { MapLegend } from '../components/BuildingMap.jsx';
 import { PageHead } from '../components/Shell.jsx';
@@ -27,14 +27,14 @@ export default function Rooms() {
   };
   const counts = Object.values(s.rooms).reduce((m, r) => { m[r.status] = (m[r.status] || 0) + 1; return m; }, {});
   const wingNote = (w) => {
-    const rooms = Array.from({ length: 8 }, (_, i) => `${w.id}${i + 1}`);
+    const rooms = w.rooms;
     if (allotted) return `${rooms.filter((r) => s.holder[r] || s.rooms[r].status === 'pre').length}/8 filled`;
     return `${rooms.filter((r) => s.rooms[r].status === 'available').length}/8 open`;
   };
 
   return (
     <>
-      <PageHead title="Building" sub={`${s.hostel.name} · 2 floors · 4 wings · ${counts.available || 0} open, ${counts.blocked || 0} blocked, ${counts.pre || 0} pre-assigned`} />
+      <PageHead title="Building" sub={`${s.hostel.name} · 3 floors · ${s.wings.length} wings · ${counts.available || 0} open, ${counts.blocked || 0} blocked, ${counts.pre || 0} pre-assigned`} />
       <div className="content">
         <p className="muted measure">
           {editable ? 'Select a room to block it or pre-assign it. Students never see blocked or pre-assigned rooms as choices.' : 'Select a room to see who has it and how it was decided.'}
@@ -64,7 +64,7 @@ function RoomDrawer({ room, onClose, editable }) {
   if (!room) return null;
   const r = s.rooms[room];
   const h = s.holder[room];
-  const wing = s.wings.find((w) => w.id === room[0]);
+  const wing = wingOf(s, room);
   const who = h ? s.students[h.sid] : r.status === 'pre' ? s.students[r.preSid] : null;
   const candidates = Object.values(s.students).filter((x) => { const a = appOf(s, x.id); return !a || a.members.length === 1; })
     .sort((a, b) => a.name.localeCompare(b.name));

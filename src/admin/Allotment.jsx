@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useStore, gs, csvAllotment, appLabel } from '../lib/store.js';
-import { ORD } from '../lib/engine.js';
+import { ORD, yearLabel } from '../lib/engine.js';
 import { Button, Chip, Drawer, Empty, Stat, useAct, fmtTime } from '../components/ui.jsx';
 import { PageHead } from '../components/Shell.jsx';
 import { go, isEmbedded } from '../App.jsx';
@@ -130,20 +130,20 @@ export default function Allotment() {
         {tab === 'rooms' && (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Room</th><th>Student</th><th>Roll</th><th>Year</th><th>Application</th><th>How</th><th /></tr></thead>
+              <thead><tr><th>Room</th><th>Student</th><th>Roll</th><th>Class</th><th>Application</th><th>How</th><th /></tr></thead>
               <tbody>
-                {s.wings.flatMap((w) => Array.from({ length: 8 }, (_, i) => `${w.id}${i + 1}`)).map((r) => {
+                {s.wings.flatMap((w) => w.rooms).map((r) => {
                   const room = s.rooms[r];
                   const h = s.holder[r];
                   if (room.status === 'pre') {
                     const st = s.students[room.preSid];
-                    return <tr key={r}><td className="mono strong">{r}</td><td>{st.name}</td><td className="mono">{st.id}</td><td>{st.year === 4 ? '4th' : '3rd'}</td><td className="muted">—</td><td><Chip tone="muted">Pre-assigned</Chip></td><td /></tr>;
+                    return <tr key={r}><td className="mono strong">{r}</td><td>{st.name}</td><td className="mono">{st.id}</td><td>{yearLabel(st.year)}</td><td className="muted">—</td><td><Chip tone="muted">Pre-assigned</Chip></td><td /></tr>;
                   }
                   if (!h) return <tr key={r} className="dim"><td className="mono">{r}</td><td colSpan={5} className="muted">{room.status === 'blocked' ? `Blocked · ${room.reason}` : 'Empty'}</td><td /></tr>;
                   const st = s.students[h.sid];
                   return (
                     <tr key={r}>
-                      <td className="mono strong">{r}</td><td>{st.name}</td><td className="mono">{st.id}</td><td>{st.year === 4 ? '4th' : '3rd'}</td>
+                      <td className="mono strong">{r}</td><td>{st.name}</td><td className="mono">{st.id}</td><td>{yearLabel(st.year)}</td>
                       <td>{h.label !== st.name ? h.label : <span className="muted">Alone</span>}</td>
                       <td><Chip tone={h.flag ? 'warn' : howTone(h)}>{howShort(h)}</Chip></td>
                       <td className="right">{s.phase !== 'round2_open' && <Button size="sm" kind="ghost" onClick={() => setOvr({ sid: h.sid })}>Move</Button>}</td>
@@ -181,13 +181,13 @@ export default function Allotment() {
         {tab === 'waitlist' && (s.waitlist.length ? (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th className="num">#</th><th>Name</th><th>Roll</th><th>Year</th><th>Reason</th><th /></tr></thead>
+              <thead><tr><th className="num">#</th><th>Name</th><th>Roll</th><th>Class</th><th>Reason</th><th /></tr></thead>
               <tbody>
                 {s.waitlist.map((w, i) => {
                   const st = s.students[w.sid];
                   return (
                     <tr key={w.sid}>
-                      <td className="num mono">{i + 1}</td><td>{st.name}</td><td className="mono">{st.id}</td><td>{st.year === 4 ? '4th' : '3rd'}</td>
+                      <td className="num mono">{i + 1}</td><td>{st.name}</td><td className="mono">{st.id}</td><td>{yearLabel(st.year)}</td>
                       <td className="small">{w.reason}</td>
                       <td className="right"><Button size="sm" kind="ghost" onClick={() => setOvr({ sid: w.sid })}>Assign room</Button></td>
                     </tr>
@@ -236,7 +236,7 @@ export function OverrideDrawer({ target, onClose }) {
   if (!target) return null;
   const allowed = s.phase === 'round1_review' || s.phase === 'round2_review';
   const from = Object.keys(s.holder).find((r) => s.holder[r].sid === sid);
-  const rooms = s.wings.flatMap((w) => Array.from({ length: 8 }, (_, i) => `${w.id}${i + 1}`)).filter((r) => s.rooms[r].status === 'available' && r !== from);
+  const rooms = s.wings.flatMap((w) => w.rooms).filter((r) => s.rooms[r].status === 'available' && r !== from);
   const free = rooms.filter((r) => !s.holder[r]);
   const taken = rooms.filter((r) => s.holder[r]);
 

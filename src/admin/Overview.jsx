@@ -1,4 +1,4 @@
-import { useStore, gs, appOf, invitesFor, isPreassigned, appLabel, memberIds } from '../lib/store.js';
+import { useStore, gs, appOf, invitesFor, isPreassigned, appLabel, memberIds, yearLabel } from '../lib/store.js';
 import { ConfirmButton, useAct, fmtDeadline, phaseStatus } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
 import { PageHead } from '../components/Shell.jsx';
@@ -107,7 +107,7 @@ export default function Overview() {
             {(open ? noApp : s.waitlist.map((w) => s.students[w.sid])).map((x, i) => (
               <a className="person" key={x.id} href={`#/gs/students/${x.id}`}>
                 <span className="avatar sm">{open ? x.name.split(' ').map((p) => p[0]).join('') : i + 1}</span>
-                <span className="t"><b>{x.name}</b><span>{x.id} · {x.year === 4 ? '4th' : '3rd'} year</span></span>
+                <span className="t"><b>{x.name}</b><span>{x.id} · {yearLabel(x.year)}</span></span>
               </a>
             ))}
             {(open ? noApp : s.waitlist).length === 0 && <p className="muted">{open ? 'Everyone has applied.' : 'Nobody is waiting.'}</p>}

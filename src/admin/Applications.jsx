@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useStore, appLabel, appClass, memberIds, readiness } from '../lib/store.js';
-import { blockLabel, classLabel } from '../lib/engine.js';
+import { blockLabel, classLabel, yearLabel } from '../lib/engine.js';
 import { Chip, Drawer, fmtTime } from '../components/ui.jsx';
 import { PageHead } from '../components/Shell.jsx';
 import { OutcomeChip } from './Allotment.jsx';
@@ -27,7 +27,7 @@ export default function Applications() {
 
   return (
     <>
-      <PageHead title="Applications" sub="Sorted in priority order: wing groups, then groups, then individuals; 4th years before 3rd years." />
+      <PageHead title="Applications" sub="Sorted in priority order: wing groups, then groups, then individuals; final years (Class of 2028) before incoming students (Class of 2029)." />
       <div className="content">
         <div className="toolbar">
           <div className="seg" role="group" aria-label="Filter applications">
@@ -89,13 +89,13 @@ function AppDrawer({ id, onClose }) {
 
       <h3 className="h-sub">Members</h3>
       <table className="tbl compact">
-        <thead><tr><th>Name</th><th>Roll</th><th>Year</th></tr></thead>
+        <thead><tr><th>Name</th><th>Roll</th><th>Class</th></tr></thead>
         <tbody>
           {a.members.map((m) => (
             <tr key={m.sid}>
               <td>{s.students[m.sid].name}{m.sid === a.repId && a.members.length > 1 ? <span className="muted"> · rep</span> : ''}</td>
               <td className="mono">{m.sid}</td>
-              <td>{s.students[m.sid].year === 4 ? '4th' : '3rd'}</td>
+              <td>{yearLabel(s.students[m.sid].year)}</td>
             </tr>
           ))}
         </tbody>

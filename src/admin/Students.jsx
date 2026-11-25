@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useStore, appOf, invitesFor, isPreassigned, roomOf, appLabel, onWaitlist } from '../lib/store.js';
+import { useStore, appOf, invitesFor, isPreassigned, roomOf, appLabel, onWaitlist, yearLabel } from '../lib/store.js';
 import { Chip } from '../components/ui.jsx';
 import { PageHead } from '../components/Shell.jsx';
 import { howShort } from './Allotment.jsx';
@@ -36,7 +36,7 @@ export default function Students() {
 
   return (
     <>
-      <PageHead title="Students" sub={`${rows.length} students · ${rows.filter((r) => r.st.year === 4).length} in 4th year, ${rows.filter((r) => r.st.year === 3).length} in 3rd year`} />
+      <PageHead title="Students" sub={`${rows.length} students · ${rows.filter((r) => r.st.year === 4).length} in the Class of 2028 (final year), ${rows.filter((r) => r.st.year === 3).length} in the Class of 2029 (incoming)`} />
       <div className="content">
         <div className="toolbar">
           <input className="input" type="search" placeholder="Search name or roll number" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search students" />
@@ -48,13 +48,13 @@ export default function Students() {
         </div>
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Name</th><th>Roll number</th><th>Year</th><th>Application</th><th>Status</th><th>Room</th></tr></thead>
+            <thead><tr><th>Name</th><th>Roll number</th><th>Class</th><th>Application</th><th>Status</th><th>Room</th></tr></thead>
             <tbody>
               {shown.map(({ st, status, app, room }) => (
                 <tr key={st.id}>
                   <td><a className="link strong" href={`#/gs/students/${st.id}`}>{st.name}</a></td>
                   <td className="mono">{st.id}</td>
-                  <td>{st.year === 4 ? '4th' : '3rd'}</td>
+                  <td>{yearLabel(st.year)}</td>
                   <td>{app ? <>{appLabel(s, app)}{app.repId === st.id && app.members.length > 1 ? <span className="muted"> · rep</span> : null}</> : <span className="muted">—</span>}</td>
                   <td><Chip tone={status.tone}>{status.label}</Chip></td>
                   <td>{room ? <><span className="mono strong">{room.room}</span> <span className="muted small">{room.how === 'pre' ? '' : howShort(room)}</span></> : <span className="muted">—</span>}</td>

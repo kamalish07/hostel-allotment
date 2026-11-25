@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { makeSeed } from './seed.js';
 import {
-  runRound, finalPlacement, lotteryFor, classInfo, typeForSize, checkChoices, roomWing, blockLabel, TYPE_LABEL,
+  runRound, finalPlacement, lotteryFor, classInfo, typeForSize, checkChoices, wingOfRoom, blockLabel, TYPE_LABEL, yearLabel, cohortTag,
 } from './engine.js';
 
 const KEY = 'hostel-allotment-demo';
@@ -13,7 +13,7 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s && s.version === 5) return s;
+      if (s && s.version === 6) return s;
     }
   } catch { /* ignore */ }
   return makeSeed();
@@ -29,7 +29,7 @@ if (typeof window !== 'undefined') {
     if (e.key !== KEY) return;
     try {
       state = e.newValue ? JSON.parse(e.newValue) : makeSeed();
-      if (!state || state.version !== 5) state = makeSeed();
+      if (!state || state.version !== 6) state = makeSeed();
     } catch { state = makeSeed(); }
     listeners.forEach((l) => l());
   });
@@ -216,6 +216,7 @@ export const student = {
         next.status = 'accepted';
       }
       resetChoices(app);
+      app.notice = `${d.students[sid].name.split(' ')[0]} left the group, so the choices were cleared. Pick rooms again and submit before Round 1 closes.`;
     });
   },
   withdraw(appId) {
@@ -229,6 +230,13 @@ export const student = {
       assertPhase(d, round === 1 ? 'round1_open' : 'round2_open');
       const app = d.apps[appId];
       const target = round === 1 ? app : app.r2;
+      // Picking a block that is already another choice moves it here instead of duplicating it.
+      const key = [...rooms].sort().join(',');
+      if (rooms.length) {
+        target.choices.forEach((c, j) => {
+          if (j !== idx && c && c.length && [...c].sort().join(',') === key) { target.choices[j] = []; target.mappings[j] = []; }
+        });
+      }
       target.choices[idx] = rooms;
       // Reuse the order the rep already set in another choice, so they only assign people once.
       const members = memberIds(app);
@@ -276,7 +284,11 @@ export const student = {
       if (!check.ok) throw new UserError(check.blocking[0]);
       app.status = 'submitted';
       app.submittedAt = new Date().toISOString();
+      delete app.notice;
     });
+  },
+  dismissNotice(appId) {
+    return update((d) => { if (d.apps[appId]) delete d.apps[appId].notice; });
   },
   submitRound2(appId) {
     return update((d) => {
@@ -335,7 +347,13 @@ export const gs = {
       d.rooms[roomId] = { status, reason: status === 'available' ? '' : reason.trim(), preSid: status === 'pre' ? preSid : null };
       // drop this room from any choice that used it
       Object.values(d.apps).forEach((a) => {
-        a.choices.forEach((c, i) => { if (status !== 'available' && c.includes(roomId)) { a.choices[i] = []; a.mappings[i] = []; if (a.status === 'submitted') a.status = 'draft'; } });
+        // Only that choice is removed; a submitted application stays submitted and the student is told why.
+        a.choices.forEach((c, i) => {
+          if (status !== 'available' && c.includes(roomId)) {
+            a.choices[i] = []; a.mappings[i] = [];
+            a.notice = `Room ${roomId} is no longer available (${status === 'pre' ? 'pre-assigned' : 'blocked'} by the GS), so your ${['1st', '2nd', '3rd'][i]} choice was removed.${a.status === 'submitted' ? ' Your application is still submitted; you can add another choice.' : ''}`;
+          }
+        });
       });
     });
   },
@@ -411,7 +429,7 @@ export const gs = {
       const queue = [...failed.map((a) => ({ a, reason: 'All Round 2 choices taken' })), ...noReply.map((a) => ({ a, reason: 'No Round 2 choices submitted' }))]
         .sort((x, y) => cmp(x.a, y.a))
         .map(({ a, reason }) => ({ id: a.id, label: appLabel(d, a), members: accepted(a), late: a.late, reason,
-          firstWing: a.choices[0] && a.choices[0][0] ? roomWing(a.choices[0][0]) : null }));
+          firstWing: (() => { const c = a.choices.find((x) => x && x.length); return c ? wingOfRoom(d.wings, c[0]) : null; })() }));
       // students with nothing at all
       const placedSids = new Set(Object.values(holder).map((h) => h.sid));
       const inQueue = new Set(queue.flatMap((q) => q.members));
@@ -469,20 +487,19 @@ export const gs = {
 };
 
 export function csvAllotment(s) {
-  const rows = [['Room', 'Wing', 'Roll number', 'Name', 'Year', 'Application', 'How decided', 'Round']];
+  const rows = [['Room', 'Floor', 'Wing', 'Roll number', 'Name', 'Class', 'Application', 'How decided', 'Round']];
   const how = (h) => (h.how === 'choice' ? `${['1st', '2nd', '3rd'][h.rank - 1]} choice` : h.how);
   s.wings.forEach((w) => {
-    for (let n = 1; n <= 8; n++) {
-      const r = `${w.id}${n}`;
+    w.rooms.forEach((r) => {
       const room = s.rooms[r];
-      if (room.status === 'pre') { const st = s.students[room.preSid]; rows.push([r, w.id, st.id, st.name, st.year, '', 'Pre-assigned', '']); continue; }
+      if (room.status === 'pre') { const st = s.students[room.preSid]; rows.push([r, w.floor, w.name, st.id, st.name, yearLabel(st.year), '', 'Pre-assigned', '']); return; }
       const h = s.holder[r];
-      if (!h) { rows.push([r, w.id, '', '', '', '', room.status === 'blocked' ? 'Blocked' : 'Empty', '']); continue; }
+      if (!h) { rows.push([r, w.floor, w.name, '', '', '', '', room.status === 'blocked' ? 'Blocked' : 'Empty', '']); return; }
       const st = s.students[h.sid];
-      rows.push([r, w.id, st.id, st.name, st.year, h.label || '', how(h), h.round]);
-    }
+      rows.push([r, w.floor, w.name, st.id, st.name, yearLabel(st.year), h.label || '', how(h), h.round]);
+    });
   });
-  s.waitlist.forEach((wl, i) => { const st = s.students[wl.sid]; rows.push([`Waitlist ${i + 1}`, '', st.id, st.name, st.year, '', wl.reason, '']); });
+  s.waitlist.forEach((wl, i) => { const st = s.students[wl.sid]; rows.push([`Waitlist ${i + 1}`, '', '', st.id, st.name, yearLabel(st.year), '', wl.reason, '']); });
   return rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
 }
 
@@ -490,6 +507,9 @@ export { TYPE_LABEL, blockLabel, typeForSize };
 
 // ---------------------------------------------------------------- display helpers
 import { FLOOR_NAMES, BRANCH_NAMES } from './seed.js';
-export const wingPlace = (w) => `${FLOOR_NAMES[w.floor]}, ${w.side} side`;
+export const wingPlace = (w) => `${FLOOR_NAMES[w.floor]} · ${w.dir} wing`;
+export const wingOf = (s, room) => { const id = wingOfRoom(s.wings, room); return s.wings.find((w) => w.id === id) || null; };
+export const cohort = (st) => `${yearLabel(st.year)} · ${cohortTag(st.year)}`;
+export { yearLabel, cohortTag };
 export const branchName = (st) => BRANCH_NAMES[st.branch] || st.branch;
 export { FLOOR_NAMES };

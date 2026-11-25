@@ -1,19 +1,37 @@
 // Allocation engine. Pure functions, no UI.
-// Priority: class (type, then year) -> choice rank (inside a class) -> size -> lottery.
+// Priority: class (type, then seniority) -> choice rank (inside a class) -> size -> lottery.
+// Rooms are identified by their room number (e.g. "203"). Each wing lists its rooms in corridor order,
+// so rooms next to each other in that list are neighbours.
 
 export const TYPE_RANK = { wing: 0, group: 1, ind: 2 };
 export const TYPE_LABEL = { wing: 'Wing group', group: 'Group', ind: 'Individual' };
 export const ORD = ['1st', '2nd', '3rd'];
-export const ROOMS_PER_WING = 8;
+
+// Seniority is stored as year of study (4 = final year, 3 = incoming) and shown as the graduating class.
+export const COHORT = { 4: 2028, 3: 2029 };
+export const classOf = (y) => COHORT[y >= 4 ? 4 : 3];
+export const yearLabel = (y) => `Class of ${classOf(y)}`;
+export const cohortTag = (y) => (y >= 4 ? 'Final year' : 'Incoming');
 
 export const typeForSize = (n) => (n >= 5 ? 'wing' : n >= 2 ? 'group' : 'ind');
-export const roomNum = (id) => parseInt(id.slice(1), 10);
-export const roomWing = (id) => id[0];
+
+// ---------------------------------------------------------------- wing index
+const IDX = new WeakMap();
+export function indexWings(wings) {
+  let ix = IDX.get(wings);
+  if (!ix) {
+    ix = { wing: {}, pos: {} };
+    wings.forEach((w) => w.rooms.forEach((r, i) => { ix.wing[r] = w.id; ix.pos[r] = i; }));
+    IDX.set(wings, ix);
+  }
+  return ix;
+}
+export const wingOfRoom = (wings, r) => indexWings(wings).wing[r];
 
 export function blockLabel(rooms) {
   if (!rooms || rooms.length === 0) return '—';
   if (rooms.length === 1) return rooms[0];
-  return `${rooms[0]}–${roomNum(rooms[rooms.length - 1])}`;
+  return `${rooms[0]}–${rooms[rooms.length - 1]}`;
 }
 
 // Lottery: deterministic 4-digit number per application from the published seed.
@@ -41,15 +59,8 @@ export function classInfo(memberIds, students) {
   const years = memberIds.map((sid) => students[sid].year);
   const year = Math.min(...years);
   const type = typeForSize(memberIds.length);
-  return {
-    type,
-    year,
-    mixed: new Set(years).size > 1,
-    cls: TYPE_RANK[type] * 2 + (year >= 4 ? 0 : 1),
-  };
+  return { type, year, mixed: new Set(years).size > 1, cls: TYPE_RANK[type] * 2 + (year >= 4 ? 0 : 1) };
 }
-
-export const yearLabel = (y) => (y >= 4 ? '4th yr' : '3rd yr');
 export const classLabel = (ci) => `${TYPE_LABEL[ci.type]}, ${yearLabel(ci.year)}`;
 
 export const isAvailable = (rooms, id) => !!rooms[id] && rooms[id].status === 'available';
@@ -58,30 +69,31 @@ export const isAvailable = (rooms, id) => !!rooms[id] && rooms[id].status === 'a
 export function validBlocks(rooms, wings, n, holder = null) {
   const out = [];
   for (const w of wings) {
-    for (let s = 1; s + n - 1 <= ROOMS_PER_WING; s++) {
-      const b = [];
-      for (let k = 0; k < n; k++) b.push(`${w.id}${s + k}`);
+    for (let s = 0; s + n <= w.rooms.length; s++) {
+      const b = w.rooms.slice(s, s + n);
       if (b.every((r) => isAvailable(rooms, r) && !(holder && holder[r]))) out.push(b);
     }
   }
   return out;
 }
 
-// Checks one application's choices. Returns { perChoice: [msg|null x3], errors: [msg] }.
+// Checks one application's choices. Returns { perChoice: [msg|null x3], errors: [msg], ok }.
 export function checkChoices({ choices, size, rooms, wings, holder = null, minChoices = 3 }) {
+  const ix = indexWings(wings);
   const perChoice = [null, null, null];
   const errors = [];
   const seen = new Set();
   const filled = choices.filter((c) => c && c.length);
   choices.forEach((c, i) => {
     if (!c || !c.length) return;
-    if (c.length !== size) perChoice[i] = `Needs ${size} room${size > 1 ? 's' : ''}, has ${c.length}.`;
-    else if (new Set(c.map(roomWing)).size > 1) perChoice[i] = 'All rooms must be in one wing.';
-    else if (c.some((r) => !isAvailable(rooms, r))) perChoice[i] = 'Includes a blocked or pre-assigned room.';
+    if (c.length !== size) perChoice[i] = `Needs ${size} room${size > 1 ? 's' : ''}, has ${c.length}. Pick again.`;
+    else if (c.some((r) => !ix.wing[r])) perChoice[i] = 'Includes a room that doesn’t exist.';
+    else if (new Set(c.map((r) => ix.wing[r])).size > 1) perChoice[i] = 'All rooms must be in one wing.';
+    else if (c.some((r) => !isAvailable(rooms, r))) perChoice[i] = 'Includes a room that is no longer available.';
     else if (holder && c.some((r) => holder[r])) perChoice[i] = 'Includes a room that is already taken.';
     else {
-      const nums = c.map(roomNum).sort((a, b) => a - b);
-      if (nums.some((n, k) => k > 0 && n !== nums[k - 1] + 1)) perChoice[i] = 'Rooms must be next to each other.';
+      const pos = c.map((r) => ix.pos[r]).sort((a, b) => a - b);
+      if (pos.some((p, k) => k > 0 && p !== pos[k - 1] + 1)) perChoice[i] = 'Rooms must be next to each other.';
     }
     const key = [...c].sort().join(',');
     if (seen.has(key)) perChoice[i] = 'Same as an earlier choice.';
@@ -95,11 +107,10 @@ export function checkChoices({ choices, size, rooms, wings, holder = null, minCh
 }
 
 // ---------------------------------------------------------------- keep together
-function freeRuns(wingId, free) {
+function freeRuns(wing, free) {
   const runs = [];
   let cur = [];
-  for (let n = 1; n <= ROOMS_PER_WING; n++) {
-    const r = `${wingId}${n}`;
+  for (const r of wing.rooms) {
     if (free(r)) cur.push(r);
     else if (cur.length) { runs.push(cur); cur = []; }
   }
@@ -108,30 +119,32 @@ function freeRuns(wingId, free) {
 }
 
 export function keepTogether({ size, firstWing, wings, free }) {
-  const countFree = (w) => freeRuns(w.id, free).reduce((s, r) => s + r.length, 0);
+  const ix = indexWings(wings);
+  const countFree = (w) => freeRuns(w, free).reduce((s, r) => s + r.length, 0);
+  const name = (w) => w.label || w.id;
   const order = [...wings].sort((a, b) => {
     if (a.id === firstWing) return -1;
     if (b.id === firstWing) return 1;
     return countFree(b) - countFree(a) || a.id.localeCompare(b.id);
   });
   for (const w of order) {
-    const run = freeRuns(w.id, free).find((r) => r.length >= size);
+    const run = freeRuns(w, free).find((r) => r.length >= size);
     if (run) {
       return { rooms: run.slice(0, size), split: false,
-        why: `next ${size} free neighbouring room${size > 1 ? 's' : ''}${w.id === firstWing ? ' in the wing of the 1st choice' : ` in wing ${w.id}`}` };
+        why: `next ${size} free neighbouring room${size > 1 ? 's' : ''}${w.id === firstWing ? ' in the wing of the 1st choice' : ` in ${name(w)}`}` };
     }
   }
   for (const w of order) {
-    const runs = freeRuns(w.id, free).sort((a, b) => b.length - a.length);
+    const runs = freeRuns(w, free).sort((a, b) => b.length - a.length);
     if (runs.reduce((s, r) => s + r.length, 0) >= size) {
       const pick = [];
       runs.forEach((r) => r.forEach((x) => { if (pick.length < size) pick.push(x); }));
-      pick.sort((a, b) => roomNum(a) - roomNum(b));
-      return { rooms: pick, split: true, why: `no ${size} neighbouring rooms left; kept in wing ${w.id}, split` };
+      pick.sort((a, b) => ix.pos[a] - ix.pos[b]);
+      return { rooms: pick, split: true, why: `no ${size} neighbouring rooms left; kept in ${name(w)}, split` };
     }
   }
   const all = [];
-  wings.forEach((w) => freeRuns(w.id, free).forEach((r) => all.push(...r)));
+  wings.forEach((w) => freeRuns(w, free).forEach((r) => all.push(...r)));
   if (all.length >= size) return { rooms: all.slice(0, size), split: true, why: 'split across wings' };
   return null;
 }
@@ -153,7 +166,9 @@ export function runRound({ round, entrants, rooms, wings, students, holder }) {
     events.push({ round, appId: e.id, label: e.label, cls: clsText(e), rank, outcome, detail, rooms: rms });
 
   const assign = (e, rms, rank, how, mapping, flag = false) => {
-    const order = mapping && mapping.length === rms.length && mapping.every(Boolean) ? mapping : e.members;
+    const ok = mapping && mapping.length === rms.length && mapping.every(Boolean) && new Set(mapping).size === mapping.length
+      && mapping.every((m) => e.members.includes(m));
+    const order = ok ? mapping : e.members;
     rms.forEach((r, i) => {
       holder[r] = { sid: order[i], appId: e.id, label: e.label, round, rank, cls: effCls(e), type: info[e.id].type,
         year: info[e.id].year, size: e.members.length, lottery: e.lottery, late: !!e.late, how, flag };
@@ -165,23 +180,23 @@ export function runRound({ round, entrants, rooms, wings, students, holder }) {
     const byHolder = new Map();
     rms.filter((r) => !free(r)).forEach((r) => {
       const h = holder[r];
-      const key = h ? h.appId : 'blocked';
+      const key = h ? h.appId || h.sid : 'blocked';
       if (!byHolder.has(key)) byHolder.set(key, []);
       byHolder.get(key).push(r);
     });
     const mine = effCls(e);
     const parts = [];
-    for (const [key, rs] of byHolder) {
+    for (const [, rs] of byHolder) {
       const h = holder[rs[0]];
       let rule;
-      if (!h) rule = 'blocked';
+      if (!h) rule = 'not available';
       else if (h.how === 'pre') rule = 'pre-assigned by the GS';
       else if (h.round !== round) rule = `settled in Round ${h.round}`;
-      else if (h.how === 'override') rule = 'GS override';
+      else if (h.how === 'override') rule = 'GS change';
       else if (h.cls < mine) {
         if (e.late && !h.late) rule = 'on-time form beats late form';
         else if (TYPE_RANK[h.type] < TYPE_RANK[info[e.id].type]) rule = `type: ${TYPE_LABEL[h.type].toLowerCase()} beats ${TYPE_LABEL[info[e.id].type].toLowerCase()}`;
-        else rule = 'seniority: 4th yr beats 3rd yr';
+        else rule = `seniority: ${yearLabel(4)} goes before ${yearLabel(3)}`;
       } else if (h.rank < rank) rule = `same class: their ${ORD[h.rank - 1]} choice beats your ${ORD[rank - 1]}`;
       else if (h.size > e.members.length) rule = `same class and choice: bigger group (${h.size} vs ${e.members.length})`;
       else rule = `same class, choice and size: lottery #${h.lottery} vs #${e.lottery}`;
@@ -217,7 +232,8 @@ export function runRound({ round, entrants, rooms, wings, students, holder }) {
     for (const e of rest) {
       const isGroup = e.members.length > 1;
       if (isGroup && (round === 2 || e.fallback === 'auto')) {
-        const firstWing = e.choices[0] && e.choices[0].length ? roomWing(e.choices[0][0]) : null;
+        const first = e.choices.find((x) => x && x.length);
+        const firstWing = first ? wingOfRoom(wings, first[0]) : null;
         const kt = keepTogether({ size: e.members.length, firstWing, wings, free });
         if (kt) {
           assign(e, kt.rooms, 4, kt.split ? 'split' : 'fallback', null, true);
@@ -243,7 +259,7 @@ export function runRound({ round, entrants, rooms, wings, students, holder }) {
 }
 
 // ---------------------------------------------------------------- final placement
-// queue: [{ id, label, members, late, reason }] already in priority order
+// queue: [{ id, label, members, late, reason, firstWing }] already in priority order
 export function finalPlacement({ queue, rooms, wings, holder, seed }) {
   const rnd = mulberry32(Number(seed) + 7919);
   const free = (r) => isAvailable(rooms, r) && !holder[r];
@@ -257,12 +273,20 @@ export function finalPlacement({ queue, rooms, wings, holder, seed }) {
         events.push({ round: 'final', appId: q.id, label: q.label, outcome: 'random', detail: `${q.reason}. Kept together in ${kt.split ? kt.rooms.join(', ') : blockLabel(kt.rooms)}. Flagged.`, rooms: kt.rooms });
         continue;
       }
-      q.members.forEach((sid) => waitlist.push({ sid, appId: q.id, reason: q.reason }));
-      events.push({ round: 'final', appId: q.id, label: q.label, outcome: 'waitlist', detail: `${q.reason}. No rooms left: waitlisted.` });
+      // Not enough rooms for the whole group: place as many as possible, waitlist the rest.
+      const freeNow = [];
+      wings.forEach((w) => w.rooms.forEach((r) => { if (free(r)) freeNow.push(r); }));
+      const placedHere = [];
+      q.members.forEach((sid, i) => {
+        if (i < freeNow.length) { holder[freeNow[i]] = { sid, appId: q.id, label: q.label, round: 'final', how: 'random', flag: true }; placedHere.push(freeNow[i]); }
+        else waitlist.push({ sid, appId: q.id, reason: q.reason });
+      });
+      events.push({ round: 'final', appId: q.id, label: q.label, outcome: placedHere.length ? 'random' : 'waitlist',
+        detail: `${q.reason}. ${placedHere.length ? `Only ${placedHere.length} room${placedHere.length > 1 ? 's' : ''} left (${placedHere.join(', ')}); the rest waitlisted` : 'No rooms left: waitlisted'}.`, rooms: placedHere });
       continue;
     }
     const all = [];
-    wings.forEach((w) => { for (let n = 1; n <= ROOMS_PER_WING; n++) if (free(`${w.id}${n}`)) all.push(`${w.id}${n}`); });
+    wings.forEach((w) => w.rooms.forEach((r) => { if (free(r)) all.push(r); }));
     if (!all.length) {
       waitlist.push({ sid: q.members[0], appId: q.id, reason: q.reason });
       events.push({ round: 'final', appId: q.id, label: q.label, outcome: 'waitlist', detail: `${q.reason}. No rooms left: waitlisted.` });

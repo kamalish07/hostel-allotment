@@ -1,5 +1,5 @@
 import {
-  appOf, roomOf, appLabel, appClass, memberIds, isPreassigned, onWaitlist, wingPlace, branchName,
+  appOf, roomOf, appLabel, appClass, memberIds, isPreassigned, onWaitlist, wingPlace, branchName, wingOf, cohort,
 } from '../lib/store.js';
 import { classLabel } from '../lib/engine.js';
 import { studentStatus } from '../admin/Students.jsx';
@@ -19,7 +19,7 @@ export default function ProfileView({ s, sid, admin }) {
   const app = appOf(s, sid);
   const room = roomOf(s, sid);
   const showRoom = admin ? !!room : roomVisible(s, sid);
-  const wing = room ? s.wings.find((w) => w.id === room.room[0]) : null;
+  const wing = room ? wingOf(s, room.room) : null;
   const status = studentStatus(s, sid);
   const wl = onWaitlist(s, sid);
   const link = (id) => (admin ? <a className="link" href={`#/gs/students/${id}`}>{s.students[id].name}</a> : s.students[id].name);
@@ -31,7 +31,7 @@ export default function ProfileView({ s, sid, admin }) {
         <div className="profile-id">
           <h2>{st.name}</h2>
           <p className="mono muted">{st.id}</p>
-          <p className="muted">{st.programme} · {branchName(st)} · {st.year === 4 ? '4th' : '3rd'} year</p>
+          <p className="muted">{st.programme} · {branchName(st)} · {cohort(st)}</p>
         </div>
         <div className="profile-status"><Chip tone={status.tone}>{status.label}</Chip></div>
       </div>
@@ -43,7 +43,7 @@ export default function ProfileView({ s, sid, admin }) {
             <dt>Roll number</dt><dd className="mono">{st.id}</dd>
             <dt>Programme</dt><dd>{st.programme}</dd>
             <dt>Branch</dt><dd>{branchName(st)}</dd>
-            <dt>Year</dt><dd>{st.year === 4 ? '4th year' : '3rd year'}</dd>
+            <dt>Class</dt><dd>{cohort(st)}</dd>
             <dt>Batch</dt><dd>{st.batch}</dd>
             <dt>Date of birth</dt><dd>{st.dob}</dd>
             <dt>Blood group</dt><dd>{st.blood}</dd>

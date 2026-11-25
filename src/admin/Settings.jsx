@@ -48,8 +48,8 @@ export default function Settings() {
           <h2 className="h-sec">Rules in force</h2>
           <ol className="rules">
             <li><b>Type first.</b> Wing groups (5–8), then groups (2–4), then individuals.</li>
-            <li><b>Then year.</b> 4th years before 3rd years. A mixed group ranks as its most junior member.</li>
-            <li><b>Then choice.</b> Within the same type and year, a 1st choice beats a 2nd, a 2nd beats a 3rd.</li>
+            <li><b>Then seniority.</b> Final years (Class of 2028) before incoming students (Class of 2029). A mixed group ranks with its incoming members.</li>
+            <li><b>Then choice.</b> Within the same type and class, a 1st choice beats a 2nd, a 2nd beats a 3rd.</li>
             <li><b>Then size, then lottery.</b> Bigger group first; the lower lottery number settles exact ties.</li>
             <li><b>Blocks are all or nothing.</b> One taken room fails the whole choice.</li>
             <li><b>Late forms</b> come after every on-time application in Round 2.</li>

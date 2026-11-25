@@ -9,7 +9,8 @@
     "preview": "vite preview --port 5173",
     "test": "node src/lib/engine.test.mjs",
     "build:publish": "vite build --mode hosted --base=./ && node scripts/make-artifact.mjs",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "simulate": "node scripts/simulate.mjs 60"
   },
   "dependencies": {
     "react": "18.3.1",

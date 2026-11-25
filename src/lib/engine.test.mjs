@@ -1,7 +1,7 @@
 // Reproduces the worked example from the design PDF and checks every room.
 import { runRound, finalPlacement, blockLabel } from './engine.js';
 
-const wings = ['A', 'B', 'C', 'D'].map((id) => ({ id }));
+const wings = ['A', 'B', 'C', 'D'].map((id) => ({ id, rooms: Array.from({ length: 8 }, (_, i) => `${id}${i + 1}`) }));
 const rooms = {};
 wings.forEach((w) => { for (let n = 1; n <= 8; n++) rooms[`${w.id}${n}`] = { status: 'available' }; });
 rooms.C8 = { status: 'pre' };

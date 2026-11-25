@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useStore, appOf, invitesFor, isPreassigned, roomOf, resetDemo } from './lib/store.js';
+import { useStore, appOf, invitesFor, isPreassigned, roomOf, resetDemo, yearLabel } from './lib/store.js';
 import { Chip, useAct, phaseStatus } from './components/ui.jsx';
 import Icon from './components/Icon.jsx';
 import { initials } from './components/Profile.jsx';
@@ -60,7 +60,7 @@ export default function SignIn() {
                 <li key={st.id}>
                   <a href={`#/s/${st.id}`}>
                     <span className="avatar sm">{initials(st.name)}</span>
-                    <span className="t"><b>{st.name}</b><span>{st.id} · {st.year === 4 ? '4th' : '3rd'} year</span></span>
+                    <span className="t"><b>{st.name}</b><span>{st.id} · {yearLabel(st.year)}</span></span>
                     <Chip tone={tone}>{label}</Chip>
                   </a>
                 </li>
